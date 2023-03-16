@@ -1,0 +1,104 @@
+---
+title: "final"
+output:
+  pdf_document: default
+  word_document: default
+date: "2022-09-09"
+---
+
+```{r}
+library(astsa)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(Synth)
+library(tidysynth)
+library(microsynth)
+library(gsynth)
+library(tinytex)
+library(latexpdf)
+options(scipen=999)
+
+main_data_pool <- read.csv('owid-covid-data.csv')
+main_data_pool$date <- as.Date(main_data_pool$date, format = '%Y-%m-%d')
+
+#full_model
+main_data <-  filter(main_data_pool, iso_code == 'RUS' | iso_code == 'USA' | iso_code == 'UKR' | iso_code == 'MEX'
+                     | iso_code == 'BRA' | iso_code == 'ITA' | iso_code == 'DEU' | iso_code == 'GBR'
+                     | iso_code == 'FRA' | iso_code == 'BGR' | iso_code == 'SRB' | iso_code == 'ESP'
+                     | iso_code == 'ROU' | iso_code == 'PER' | iso_code == 'POL' | iso_code == 'PHL'
+                     | iso_code == 'SWE' | iso_code == 'BEL' | iso_code == 'AUS' | iso_code == 'JPN'
+                     | iso_code == 'FIN' | iso_code == 'AUT' | iso_code == 'BEL' | iso_code == 'GEO'
+                     | iso_code == 'IND' | iso_code == 'CAN' | iso_code == 'COL' | iso_code == 'ARG'
+                     )
+main_data <-  filter(main_data, date >= "2020-04-01" & date <= "2022-07-01")
+main_data$vac_camp <- ifelse(main_data$date <= '2020-12-31', main_data$vac_camp <- 0, main_data$vac_camp <- 1)
+main_data$day <- rep(1:822, 27)
+
+main_data$new_deaths[is.na(main_data$new_deaths)] <- 0
+main_data$new_cases[is.na(main_data$new_cases)] <- 0
+main_data$total_deaths[is.na(main_data$total_deaths)] <- 0
+
+cases_out <-
+  main_data %>%
+  # initial the synthetic control object
+  synthetic_control(outcome = new_deaths, # outcome
+                    unit = location, # unit index in the panel data
+                    time = day, # time index in the panel data
+                    i_unit = "Russia", # unit where the intervention occurred
+                    i_time = 450, # time period when the intervention occurred
+                    generate_placebos=TRUE # generate placebo synthetic controls (for inference)
+  ) %>%
+  # Generate the aggregate predictors used to fit the weights
+  generate_predictor(time_window = 1:450,
+                     cases = mean(new_cases, na.rm = T),
+                     vacs = mean(total_vaccinations, na.rm = TRUE),
+                     str = mean(stringency_index, na.rm = TRUE),
+                     gdp = mean(gdp_per_capita, na.rm = TRUE),
+                     popd = mean(population_density, na.rm = TRUE),
+  ) %>%
+  # generate_predictor(time_window = 100,
+  #                    deaths_100 = total_deaths) %>%
+  # generate_predictor(time_window = 200,
+  #                    deaths_200 = total_deaths) %>%
+  # generate_predictor(time_window = 300,
+  #                    deaths_300 = total_deaths) %>%
+  # generate_predictor(time_window = 400,
+  #                    deaths_400 = total_deaths) %>%
+  # generate_predictor(time_window = 500,
+  #                    deaths_500 = total_deaths) %>%
+  # generate_predictor(time_window = 600,
+#                    deaths_600 = total_deaths) %>%
+# generate_predictor(time_window = 700,
+#                    deaths_700 = total_deaths) %>%
+# generate_predictor(time_window = 800,
+#                    deaths_800 = total_deaths) %>%
+# Generate the fitted weights for the synthetic control
+generate_weights(optimization_window = 1:450, # time to use in the optimization task
+                 margin_ipop = .02,sigf_ipop = 7,bound_ipop = 6 # optimizer options
+) %>%
+  # Generate the synthetic control
+  generate_control()
+
+print(n = 27, cases_out %>% grab_signficance())
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
